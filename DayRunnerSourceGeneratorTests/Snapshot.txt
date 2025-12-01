@@ -1,0 +1,114 @@
+﻿using System.Diagnostics;
+
+namespace Advent3000;
+
+static partial class DayRunner {
+    public static void RunDay<TDay>() where TDay : IDay, new() {
+        var dayType = typeof(TDay);
+        if (dayType == typeof(Advent3000.Day01.Day01)) {
+            Console.WriteLine("Running Day01:");
+            var startTime = Stopwatch.GetTimestamp();
+            var day = new Advent3000.Day01.Day01();
+            day.Part1();
+            day.Part2();
+            Console.WriteLine($"Finished in {GetDurationString(Stopwatch.GetElapsedTime(startTime))}");
+            return;
+        }
+        if (dayType == typeof(Advent3000.Day02.Day02)) {
+            Console.WriteLine("Running Day02:");
+            var startTime = Stopwatch.GetTimestamp();
+            var day = new Advent3000.Day02.Day02();
+            day.Part1();
+            day.Part2();
+            Console.WriteLine($"Finished in {GetDurationString(Stopwatch.GetElapsedTime(startTime))}");
+            return;
+        }
+        if (dayType == typeof(Advent3000.Day03.Day03)) {
+            Console.WriteLine("Running Day03:");
+            var startTime = Stopwatch.GetTimestamp();
+            var day = new Advent3000.Day03.Day03();
+            day.Part1();
+            day.Part2();
+            Console.WriteLine($"Finished in {GetDurationString(Stopwatch.GetElapsedTime(startTime))}");
+            return;
+        }
+        throw new UnreachableException();
+    }
+    
+    public static void RunLatestDay() {
+        Console.WriteLine("Running Day03:");
+        var startTime = Stopwatch.GetTimestamp();
+        var day = new Advent3000.Day03.Day03();
+        day.Part1();
+        day.Part2();
+        Console.WriteLine($"Finished in {GetDurationString(Stopwatch.GetElapsedTime(startTime))}");
+    }
+    
+    public static void RunAllDays() {
+        var allDaysStartTime = Stopwatch.GetTimestamp();
+        {
+            Console.WriteLine("Running Day01:");
+            var startTime = Stopwatch.GetTimestamp();
+            var day = new Advent3000.Day01.Day01();
+            day.Part1();
+            day.Part2();
+            Console.WriteLine($"Finished in {GetDurationString(Stopwatch.GetElapsedTime(startTime))}");
+        }
+        {
+            Console.WriteLine("Running Day02:");
+            var startTime = Stopwatch.GetTimestamp();
+            var day = new Advent3000.Day02.Day02();
+            day.Part1();
+            day.Part2();
+            Console.WriteLine($"Finished in {GetDurationString(Stopwatch.GetElapsedTime(startTime))}");
+        }
+        {
+            Console.WriteLine("Running Day03:");
+            var startTime = Stopwatch.GetTimestamp();
+            var day = new Advent3000.Day03.Day03();
+            day.Part1();
+            day.Part2();
+            Console.WriteLine($"Finished in {GetDurationString(Stopwatch.GetElapsedTime(startTime))}");
+        }
+        Console.WriteLine($"Finished running all days in {GetDurationString(Stopwatch.GetElapsedTime(allDaysStartTime))}");
+    }
+    
+    public static void RunDay(int dayNumber) {
+        switch (dayNumber) {
+            case 1: {
+                Console.WriteLine("Running Day01:");
+                var startTime = Stopwatch.GetTimestamp();
+                var day = new Advent3000.Day01.Day01();
+                day.Part1();
+                day.Part2();
+                Console.WriteLine($"Finished in {GetDurationString(Stopwatch.GetElapsedTime(startTime))}");
+                return;
+            }
+            case 2: {
+                Console.WriteLine("Running Day02:");
+                var startTime = Stopwatch.GetTimestamp();
+                var day = new Advent3000.Day02.Day02();
+                day.Part1();
+                day.Part2();
+                Console.WriteLine($"Finished in {GetDurationString(Stopwatch.GetElapsedTime(startTime))}");
+                return;
+            }
+            case 3: {
+                Console.WriteLine("Running Day03:");
+                var startTime = Stopwatch.GetTimestamp();
+                var day = new Advent3000.Day03.Day03();
+                day.Part1();
+                day.Part2();
+                Console.WriteLine($"Finished in {GetDurationString(Stopwatch.GetElapsedTime(startTime))}");
+                return;
+            }
+            default: throw new ArgumentException("Invalid value passed in for dayNumber");
+        }
+    }
+    
+    private static string GetDurationString(TimeSpan elapsed) {
+        return elapsed.TotalMilliseconds >= 1.0
+            ? $"{elapsed.TotalMilliseconds} milliseconds" 
+            : $"{elapsed.Ticks / (TimeSpan.TicksPerMillisecond / 1000.0):#,#} microseconds";
+    }
+}

@@ -1,0 +1,8 @@
+{
+  "profiles": {
+    "DayRunnerSourceGenerator": {
+      "commandName": "DebugRoslynComponent",
+      "targetProject": "..\\Advent2025\\Advent2025.csproj"
+    }
+  }
+}
