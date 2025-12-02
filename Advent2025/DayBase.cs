@@ -1,11 +1,19 @@
-﻿namespace Advent2025;
+﻿using System.Diagnostics;
+
+namespace Advent2025;
 
 public abstract class DayBase : IDay {
     protected DayBase() {
     }
 
-    public virtual object? Part1(bool print = true) => default;
-    public virtual object? Part2(bool print = true) => default;
+    public virtual object? Part1() => default;
+    public virtual object? Part2() => default;
+
+    [Conditional("PRINT")]
+    protected static void Print(string message) => Console.WriteLine(message);
+
+    [Conditional("PRINT")]
+    protected static void Print<T>(string format, T arg) => Console.WriteLine(string.Format(format, arg));
 
     protected string GetDataFilePath() {
         var directory = Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location);

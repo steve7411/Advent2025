@@ -44,8 +44,8 @@ public class DayOutputValidationTests {
     public void ValidateDay(Type type, object? part1, object? part2) {
         var day = Activator.CreateInstance(type) as Advent2025.IDay ?? throw new Exception($"Unable to instantiate object of type {type}");
         using (new FluentAssertions.Execution.AssertionScope()) {
-            day.Part1(false).Should().Be(part1);
-            day.Part2(false).Should().Be(part2);
+            day.Part1().Should().Be(part1);
+            day.Part2().Should().Be(part2);
         }
     }
 }

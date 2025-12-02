@@ -123,8 +123,8 @@ public class DayRunnerGenerator : IIncrementalGenerator {
             writer.WriteLine("var startTime = Stopwatch.GetTimestamp();");
         }
         writer.WriteLine($"var day = new {dayInfo.qualifiedName}();");
-        writer.WriteLine($"day.Part1({(print ? "true" : "false")});");
-        writer.WriteLine($"day.Part2({(print ? "true" : "false")});");
+        writer.WriteLine($"day.Part1();");
+        writer.WriteLine($"day.Part2();");
         if (print)
             writer.WriteLine("""Console.WriteLine($"Finished in {GetDurationString(Stopwatch.GetElapsedTime(startTime))}");""");
         if (returnAtEnd)

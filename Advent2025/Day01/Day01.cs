@@ -4,7 +4,8 @@ using System.Runtime.CompilerServices;
 namespace Advent2025.Day01;
 
 internal class Day01 : DayBase {
-    const int MOD = 100;
+    private const int MOD = 100;
+
     private readonly int zeroLands;
     private readonly int zeroPasses;
 
@@ -38,16 +39,14 @@ internal class Day01 : DayBase {
         return (n ^ mask) - mask;
     }
 
-    public override object? Part1(bool print = true) {
-        if (print)
-            Console.WriteLine($"The number of times the dial ended on 0: {zeroLands}");
+    public override object? Part1() {
+        Print("The number of times the dial ended on 0: {0}", zeroLands);
         return zeroLands;
     }
 
-    public override object? Part2(bool print = true) {
+    public override object? Part2() {
         var count = zeroLands + zeroPasses;
-        if (print)
-            Console.WriteLine($"The number of times the dial passed 0: {count}");
+        Print("The number of times the dial passed 0: {0}", count);
         return count;
     }
 }
