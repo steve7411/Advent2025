@@ -141,14 +141,14 @@ public static class TextReaderExtensions {
         return buffer[..position];
     }
 
-    public static int ReadUntil(this TextReader r, Span<char> buffer, out int lastRead, params char[] stopAfter) {
+    public static int ReadUntil(this TextReader r, Span<char> buffer, out int lastRead, params ReadOnlySpan<char> stopAfter) {
         (var position, lastRead) = (0, 0);
-        while (position < buffer.Length && (lastRead = r.Read()) != -1 && Array.IndexOf(stopAfter, (char)lastRead) == -1)
+        while (position < buffer.Length && (lastRead = r.Read()) != -1 && !stopAfter.Contains((char)lastRead))
             buffer[position++] = (char)lastRead;
         return position;
     }
 
-    public static string ReadUntil(this TextReader r, params char[] stopAfter) => r.ReadUntil(1, stopAfter);
+    public static string ReadUntil(this TextReader r, params ReadOnlySpan<char> stopAfter) => r.ReadUntil(1, stopAfter);
     public static string ReadUntil(this TextReader r, char stopA, char stopB) => r.ReadUntil(1, stopA, stopB);
     public static string ReadUntil(this TextReader r, char stopA, char stopB, char stopC) => r.ReadUntilWithLastRead(1, stopA, stopB, stopC).str;
 
@@ -170,10 +170,10 @@ public static class TextReaderExtensions {
         return builderPool.ReturnAndGetString(sb);
     }
 
-    public static string ReadUntil(this TextReader r, int count, params char[] stopAfter) {
+    public static string ReadUntil(this TextReader r, int count, params ReadOnlySpan<char> stopAfter) {
         int nextVal;
         var sb = builderPool.Rent();
-        while ((nextVal = r.Read()) != -1 && (count -= Convert.ToInt32(Array.IndexOf(stopAfter, (char)nextVal) != -1)) > 0)
+        while ((nextVal = r.Read()) != -1 && (count -= Convert.ToInt32(stopAfter.Contains((char)nextVal))) > 0)
             sb.Append((char)nextVal);
         return builderPool.ReturnAndGetString(sb);
     }

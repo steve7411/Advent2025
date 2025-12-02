@@ -3,7 +3,7 @@ using System.Runtime.CompilerServices;
 
 namespace Advent2025.Day01;
 
-internal class Day01 : DayBase {
+internal sealed class Day01 : DayBase {
     private const int MOD = 100;
 
     private readonly int zeroLands;
