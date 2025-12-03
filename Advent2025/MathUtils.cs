@@ -1,9 +1,13 @@
-﻿using System.Numerics;
+﻿using System.Diagnostics;
+using System.Numerics;
+using System.Runtime.CompilerServices;
 using System.Runtime.Intrinsics.X86;
 
 namespace Advent2025;
 
 internal static class MathUtils {
+    public static ReadOnlySpan<ulong> PowTens => [1, 10, 100, 1_000, 10_000, 100_000, 1_000_000, 10_000_000, 100_000_000, 1_000_000_000, 10_000_000_000, 100_000_000_000, 1_000_000_000_000];
+
     public static T LCM<T>(T a, T b) where T : INumber<T> =>
         T.Abs(a * b) / GCD(a, b);
 
@@ -98,4 +102,16 @@ internal static class MathUtils {
         n = (n & EVEN_ADJACENT_QUAD_BYTES) << 32 | (n & ~EVEN_ADJACENT_QUAD_BYTES) >> 32;
         return n;
     }
+
+    public static ulong FromBCD(ulong bcd) {
+        Debug.Assert(Log10BCD(bcd) < PowTens.Length);
+        var res = 0UL;
+        ref var pow = ref Unsafe.AsRef(in PowTens[0]);
+        for (; bcd != 0; bcd >>= 4, pow = ref Unsafe.Add(ref pow, 1))
+            res += pow * (bcd & 0xF);
+        return res;
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static int Log10BCD(ulong numBCD) => BitOperations.Log2(numBCD) + 4 >>> 2;
 }

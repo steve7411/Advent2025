@@ -5,7 +5,7 @@ namespace Advent2025Benchmarks;
 
 [MemoryDiagnoser]
 public class DayBenchmarks {
-    [Params(1, 2)]
+    [Params(1, 2, 3)]
     public int day;
 
     [Benchmark]
