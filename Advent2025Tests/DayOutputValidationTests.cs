@@ -6,7 +6,7 @@ namespace Advent2025Tests;
 public class DayOutputValidationTestData : IEnumerable<object?[]> {
     private static readonly (Type type, object? part1, object? part2)[] validationData = {
             (typeof(Advent2025.Day01.Day01), 1097, 7101),
-            (typeof(Advent2025.Day02.Day02), 21898734247UL, default),
+            (typeof(Advent2025.Day02.Day02), 21898734247UL, 28915664389UL),
             //(typeof(Advent2025.Day03.Day03), default, default),
             //(typeof(Advent2025.Day04.Day04), default, default),
             //(typeof(Advent2025.Day05.Day05), default, default),
