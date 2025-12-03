@@ -247,7 +247,7 @@ public static class TextReaderExtensions {
         while ((nextVal = r.Read()) != -1 && (char)nextVal is not '\n' and not '\r')
             buffer[++idx] = T.CreateTruncating(nextVal);
         ConsumeFullNewLine(r, nextVal);
-        return buffer[..++idx];
+        return buffer[..(idx + 1)];
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
