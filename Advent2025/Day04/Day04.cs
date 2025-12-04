@@ -3,11 +3,10 @@ using System.Runtime.Intrinsics.X86;
 
 namespace Advent2025.Day04;
 
-internal sealed class Day04 : DayBase {
+internal unsafe sealed class Day04 : DayBase {
     const uint NINE_BITS = 0x1FF;
 
-    [InlineArray(139 << 2)]
-    private struct Buffer { public ulong first; }
+    private struct Buffer { public fixed ulong cells[139 << 2]; }
 
     private readonly int width;
     private readonly int height;
@@ -26,7 +25,7 @@ internal sealed class Day04 : DayBase {
             var rem = width + 1;
             for (var i = 0; i < elemsPerRow; ++i, rem -= 64) {
                 var end = Math.Min(64, rem);
-                ref var bits = ref grid[rowOffset + i];
+                ref var bits = ref grid.cells[rowOffset + i];
                 for (var x = i == 0 ? 1 : 0; x < end; ++x)
                     bits |= (ulong)(reader.Read() >>> 6) << x;
             }
@@ -41,7 +40,7 @@ internal sealed class Day04 : DayBase {
             var rowOffset = y << 2;
             var rem = width;
             for (var i = 0; i < elemsPerRow; ++i, rem -= 64) {
-                var bits = grid[rowOffset + i];
+                var bits = grid.cells[rowOffset + i];
                 var idx = i << 6;
                 var end = Math.Min(2, rem);
                 for (int j = 0, k = 0; j < 2; ++j) {
@@ -50,7 +49,7 @@ internal sealed class Day04 : DayBase {
                         relevant = relevant << 3 & NINE_BITS | (uint)bits & 7;
                         count += Popcnt.PopCount(relevant & ~0x10U) < 4 ? relevant >>> 4 & (uint)(-y >>> 31) : 0;
                     }
-                    bits |= grid[rowOffset + i + 1] << 62;
+                    bits |= grid.cells[rowOffset + i + 1] << 62;
                     end = Math.Min(64, rem);
                 }
             }
@@ -64,14 +63,14 @@ internal sealed class Day04 : DayBase {
         Span<uint> buffer = stackalloc uint[width + 2];
         var neighborhoods = buffer[1..^1];
 
-        for (var count = 1U; count != 0;) {
+        for (var count = 1U; count != 0; removeCount += count) {
             neighborhoods.Clear();
             count = 0;
             for (var y = 0; y <= height; ++y) {
                 var rowOffset = y << 2;
                 var rem = width;
                 for (var i = 0; i < elemsPerRow; ++i, rem -= 64) {
-                    var bits = grid[rowOffset + i];
+                    var bits = grid.cells[rowOffset + i];
                     var idx = i << 6;
                     var end = Math.Min(2, rem);
                     for (int j = 0, k = 1; j < 2; ++j) {
@@ -84,15 +83,14 @@ internal sealed class Day04 : DayBase {
                                 relevant ^= 16;
                                 Unsafe.Add(ref relevant, 1) ^= 1;
                                 var gridOffset = k >>> 6;
-                                grid[rowOffset - 4 + i + gridOffset] ^= 1UL << k;
+                                grid.cells[rowOffset - 4 + i + gridOffset] ^= 1UL << k;
                             }
                         }
-                        bits |= grid[rowOffset + i + 1] << 62;
+                        bits |= grid.cells[rowOffset + i + 1] << 62;
                         end = Math.Min(64, rem);
                     }
                 }
             }
-            removeCount += count;
         }
         return removeCount;
     }
