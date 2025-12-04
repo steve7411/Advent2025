@@ -154,11 +154,11 @@ internal sealed class Day02 : DayBase {
 
     public override object? Part1() {
         Print("The sum of the summetric ids is: {0}", symmetricSum);
-        return symmetricSum;
+        return Box<ulong>.Instance(symmetricSum);
     }
 
     public override object? Part2() {
         Print("The sum of the repeating ids is: {0}", repeatingSum);
-        return repeatingSum;
+        return Box<ulong>.Instance(repeatingSum);
     }
 }

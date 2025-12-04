@@ -41,12 +41,12 @@ internal sealed class Day01 : DayBase {
 
     public override object? Part1() {
         Print("The number of times the dial ended on 0: {0}", zeroLands);
-        return zeroLands;
+        return Box<int>.Instance(zeroLands);
     }
 
     public override object? Part2() {
         var count = zeroLands + zeroPasses;
         Print("The number of times the dial passed 0: {0}", count);
-        return count;
+        return Box<int>.Instance(count);
     }
 }

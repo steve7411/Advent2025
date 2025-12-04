@@ -52,11 +52,11 @@ internal sealed class Day03 : DayBase {
 
     public override object? Part1() {
         Print("The sum of two digit maxes is: {0}", sumOfTwoDigitMaxes);
-        return sumOfTwoDigitMaxes;
+        return Box<ulong>.Instance(sumOfTwoDigitMaxes);
     }
 
     public override object? Part2() {
         Print("The sum of twelve digit maxes is: {0}", sumOfTwelveDigitMaxes);
-        return sumOfTwelveDigitMaxes;
+        return Box<ulong>.Instance(sumOfTwelveDigitMaxes);
     }
 }

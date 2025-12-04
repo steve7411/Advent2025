@@ -16,8 +16,8 @@ public abstract class DayBase : IDay {
     protected static void Print<T>(string format, T arg) => Console.WriteLine(string.Format(format, arg));
 
     protected string GetDataFilePath() {
-        var directory = Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location);
-        return Path.Combine(directory ?? throw new Exception($"Directory returned was null"), Path.Combine(GetType().Name, "Data.txt"));
+        var directory = Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location)!;
+        return Path.Combine(directory, GetType().Name, "Data.txt");
     }
 
     protected StreamReader GetDataReader() => new(GetDataStream());

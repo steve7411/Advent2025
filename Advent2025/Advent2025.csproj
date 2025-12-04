@@ -11,6 +11,10 @@
 		<Configurations>Debug;Release;Bench</Configurations>
 	</PropertyGroup>
 
+
+	<PropertyGroup Condition="'$(Configuration)'=='Bench'">
+		<Optimize>true</Optimize>
+	</PropertyGroup>
 	<PropertyGroup Condition="'$(Configuration)'!='Bench'">
 		<DefineConstants>$(DefineConstants);PRINT</DefineConstants>
 	</PropertyGroup>
