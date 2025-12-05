@@ -119,6 +119,14 @@ public static class TextReaderExtensions {
         return buffer[..(idx + 1)];
     }
 
+    public static Span<char> ReadUntil(this TextReader r, char stopAfterA, char stopAfterB, Span<char> buffer) {
+        int nextVal;
+        var idx = -1;
+        while ((nextVal = r.Read()) != -1 && (nextVal != stopAfterA & nextVal != stopAfterB))
+            buffer[++idx] = (char)nextVal;
+        return buffer[..(idx + 1)];
+    }
+
     public static string ReadUntil(this TextReader r, char stopAfter) {
         int nextVal;
         var sb = builderPool.Rent();
