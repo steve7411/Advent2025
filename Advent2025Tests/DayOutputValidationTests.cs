@@ -10,7 +10,7 @@ public class DayOutputValidationTestData : IEnumerable<object?[]> {
             (typeof(Advent2025.Day03.Day03), 16887UL, 167302518850275UL),
             (typeof(Advent2025.Day04.Day04), 1419U, 8739U),
             (typeof(Advent2025.Day05.Day05), 739, 344486348901788UL),
-            //(typeof(Advent2025.Day06.Day06), default, default),
+            (typeof(Advent2025.Day06.Day06), 4405895212738UL, 7450962489289UL),
             //(typeof(Advent2025.Day07.Day07), default, default),
             //(typeof(Advent2025.Day08.Day08), default, default),
             //(typeof(Advent2025.Day09.Day09), default, default),

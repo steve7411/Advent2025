@@ -19,12 +19,12 @@ internal sealed class Day05 : DayBase {
         var newLineDump = buffer[..Environment.NewLine.Length];
         using var reader = GetDataReader();
 
-        List<IdRange> ranges = new(182);
+        Span<IdRange> ranges = stackalloc IdRange[182];
         ReadRanges(buffer, reader, ranges);
         reader.Read(newLineDump);
 
         ranges.Sort();
-        var merged = MergeRanges(CollectionsMarshal.AsSpan(ranges), ref freshIdCount);
+        var merged = MergeRanges(ranges, ref freshIdCount);
 
         for (var write = 0; !reader.EndOfStream; ++write) {
             var sp = reader.ReadLine(buffer);
@@ -43,7 +43,7 @@ internal sealed class Day05 : DayBase {
         ref var write = ref left;
         var mergedCount = 0;
         for (ref var end = ref Unsafe.Add(ref left, span.Length); Unsafe.IsAddressLessThan(ref right, ref end); left = ref right, right = ref Unsafe.Add(ref right, 1), ++mergedCount) {
-            for (; Unsafe.IsAddressLessThan(ref right, ref end) && right.start <= left.end; right = ref Unsafe.Add(ref right, 1)) {
+            for (; Unsafe.IsAddressLessThan(ref right, ref end) & right.start <= left.end; right = ref Unsafe.Add(ref right, 1)) {
                 if (right.end >= left.end)
                     left.end = right.end;
             }
@@ -54,14 +54,14 @@ internal sealed class Day05 : DayBase {
         return span[..mergedCount];
     }
 
-    private static void ReadRanges(Span<char> buffer, StreamReader reader, List<IdRange> list) {
+    private static void ReadRanges(Span<char> buffer, StreamReader reader, Span<IdRange> list) {
         var firstNewLineChar = Environment.NewLine[0];
         for (var write = 0; !reader.EndOfStream & reader.Peek() is not '\r' and not '\n'; ++write) {
             var sp = reader.ReadUntil('-', buffer);
             var startBCD = ReadBCD(sp);
             sp = reader.ReadUntil(firstNewLineChar, buffer);
             var endBCD = ReadBCD(sp);
-            list.Add((startBCD, endBCD));
+            list[write] = (startBCD, endBCD);
             reader.ConsumeFullNewLine(firstNewLineChar);
         }
     }

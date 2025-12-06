@@ -1,6 +1,14 @@
 ﻿namespace Advent2025;
 
 public static class StreamExtensions {
+    public static void SeekToLine(this Stream stream, int lineIndex, int lineLength) {
+        stream.Seek(0, SeekOrigin.Begin);
+        //Read past byte order mark (BOM), if present
+        while (stream.Position < stream.Length & !IsPrintableAsciiCharacter(stream.ReadByte())) ;
+        var bytesPerLine = lineLength + Environment.NewLine.Length;
+        stream.Seek(stream.Position - 1 + lineIndex * bytesPerLine, SeekOrigin.Begin);
+    }
+
     public static (int charsInLine, int linesInFile) GetLineInfoForRegularFile(this Stream stream) {
         long startingPosition = stream.Position;
         var (lineLength, firstCharPosition) = stream.GetRemainingCharacterCountInLine();
@@ -14,12 +22,11 @@ public static class StreamExtensions {
     public static (int lineLength, long firstCharacterPosition) GetRemainingCharacterCountInLine(this Stream stream) {
         long startingPosition = stream.Position;
         stream.Seek(0, SeekOrigin.Begin);
-        static bool isPrintableAsciiCharacter(int x) => x is (>= ' ' and <= '~');
 
-        int lastChar = -1;
         //Read past byte order mark (BOM), if present
-        while (stream.Position < stream.Length && !isPrintableAsciiCharacter(lastChar = stream.ReadByte())) ;
+        while (stream.Position < stream.Length && !IsPrintableAsciiCharacter(stream.ReadByte())) ;
         var firstCharPosition = stream.Position - 1;
+        int lastChar;
         while ((lastChar = stream.ReadByte()) is not (-1 or '\r' or '\n')) ;
         var foundNewLine = lastChar != -1;
         //Read to end of newline sequence if it's more than one byte
@@ -32,4 +39,6 @@ public static class StreamExtensions {
         stream.Seek(startingPosition, SeekOrigin.Begin);
         return (lineLength - (foundNewLine ? Environment.NewLine.Length : 0), firstCharPosition);
     }
+
+    private static bool IsPrintableAsciiCharacter(int x) => x is (>= ' ' and <= '~');
 }
