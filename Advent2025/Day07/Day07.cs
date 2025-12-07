@@ -16,7 +16,8 @@ internal sealed class Day07 : DayBase {
         using var stream = GetDataStream();
         var (width, height) = stream.GetLineInfoForRegularFile();
 
-        Span<byte> readBuffer = stackalloc byte[width];
+        Span<bool> bools = stackalloc bool[width];
+        Span<byte> readBuffer = MemoryMarshal.AsBytes(bools);
         Span<long> beams = stackalloc long[width];
         beams.Clear();
 
@@ -34,7 +35,6 @@ internal sealed class Day07 : DayBase {
         var leftShiftBuffer = shiftBuffer[..^2];
         var rightShiftBuffer = shiftBuffer[2..];
         shiftBuffer[0] = shiftBuffer[^1] = 0;
-        Span<bool> bools = MemoryMarshal.CreateSpan(ref Unsafe.As<byte, bool>(ref readBuffer[0]), width);
 
         for (long y = 3, pos = lineLen << 1; y < height; y += 2, pos += twoLines) {
             stream.Seek(pos, SeekOrigin.Begin);
