@@ -75,6 +75,13 @@ public readonly struct Vector3D<T> : IEnumerable<T>, IEquatable<Vector3D<T>> whe
             a.x * b.y - b.x * a.y);
     }
 
+    public TRes SquaredDistanceTo<TRes>(in Vector3D<T> other) where TRes : INumberBase<TRes> {
+        var dx = TRes.CreateTruncating(x - other.x);
+        var dy = TRes.CreateTruncating(y - other.y);
+        var dz = TRes.CreateTruncating(z - other.z);
+        return dx * dx + dy * dy + dz * dz;
+    }
+
     public TFloat DistanceTo<TFloat>(in Vector3D<T> b) where TFloat : IRootFunctions<TFloat> {
         var delta = this - b;
         return TFloat.Sqrt(TFloat.CreateTruncating(delta * delta));
