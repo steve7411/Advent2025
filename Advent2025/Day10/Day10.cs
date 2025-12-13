@@ -1,122 +1,57 @@
 ﻿using System.Diagnostics;
 using System.Numerics;
 using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 using System.Runtime.Intrinsics.X86;
 
 namespace Advent2025.Day10;
 
 internal unsafe sealed class Day10 : DayBase {
-    private static class WideBits<T> where T : unmanaged, IBinaryInteger<T> {
-        public const int SPACING = 10;
+    private readonly ref struct SixteenSegmented {
+        private const int MAX_SIZE = 1 << 10;
 
-        private static readonly ulong LOW_PARITY;
-        private static readonly ulong HIGH_PARITY;
+        [ThreadStatic]
+        private static uint* buffer;
+        private readonly uint* lensStart;
 
-        public static readonly T BORROW_MASK;
-        public static readonly T PARITY_MASK;
-        public static readonly T DIGIT_MASK;
-        public static readonly T LEAST_SIGNIFICANT_DIGIT_MASK = (T.One << SPACING) - T.One;
-
-        static WideBits() {
-            var totalWidth = int.CreateTruncating(T.LeadingZeroCount(T.Zero));
-            var width = totalWidth - totalWidth % SPACING;
-            PARITY_MASK = T.One;
-            for (var i = SPACING; i < width; i += SPACING)
-                PARITY_MASK |= T.One << i;
-
-            BORROW_MASK = PARITY_MASK << SPACING - 1;
-            DIGIT_MASK = BORROW_MASK - PARITY_MASK;
-
-            if (typeof(T) == typeof(UInt128)) {
-                LOW_PARITY = ulong.CreateTruncating(PARITY_MASK);
-                HIGH_PARITY = ulong.CreateTruncating(PARITY_MASK >>> 64);
-            }
+        public SixteenSegmented(int len) {
+            if (buffer is null)
+                buffer = (uint*)NativeMemory.AlignedAlloc(((MAX_SIZE << 4) + MAX_SIZE) * sizeof(uint), sizeof(uint));
+            lensStart = buffer + (len << 4);
+            NativeMemory.Clear(lensStart, (nuint)(len * sizeof(uint)));
         }
 
-        public static T Expand(ReadOnlySpan<int> ints) {
-            var res = T.Zero;
-            var max = (1 << SPACING - 1) - 1;
-            for (var i = ints.Length - 1; i >= 0; --i) {
-                Debug.Assert(ints[i] <= max);
-                res = res << SPACING | T.CreateTruncating(ints[i]);
-            }
-            return res;
-        }
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public void Add(uint idx, uint val) => buffer[idx << 4 | lensStart[idx]++] = val;
 
-        public static T Expand(uint n) {
-            if (typeof(T) == typeof(ulong))
-                return T.CreateTruncating(Bmi2.X64.ParallelBitDeposit(n, ulong.CreateTruncating(PARITY_MASK)));
-            else if (typeof(T) == typeof(UInt128)) {
-                UInt128 value = new(Bmi2.X64.ParallelBitDeposit(n >>> 7, HIGH_PARITY), Bmi2.X64.ParallelBitDeposit(n, LOW_PARITY));
-                return T.CreateTruncating(value);
-            }
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public ReadOnlySpan<uint> AsSpan(int idx) => new(buffer + (idx << 4), (int)lensStart[idx]);
 
-            var res = T.Zero;
-            for (; n != 0; n = Bmi1.ResetLowestSetBit(n)) {
-                var tzc = Bmi1.TrailingZeroCount(n);
-                res |= T.One << (int)tzc * SPACING;
-            }
-            return res;
-        }
-
-        public static uint CompressParity(T n) {
-            n &= PARITY_MASK;
-            if (typeof(T) == typeof(ulong))
-                return (uint)Bmi2.X64.ParallelBitExtract(ulong.CreateTruncating(n), ulong.CreateTruncating(PARITY_MASK));
-            else if (typeof(T) == typeof(UInt128)) {
-                var high = Bmi2.X64.ParallelBitExtract(ulong.CreateTruncating(n >>> 64), HIGH_PARITY) << 7;
-                var low = Bmi2.X64.ParallelBitExtract(ulong.CreateTruncating(n), LOW_PARITY);
-                return (uint)(high | low);
-            }
-
-            var res = 0U;
-            for (; n != T.Zero; n &= n - T.One) {
-                var tzc = T.TrailingZeroCount(n);
-                res |= 1U << int.CreateTruncating(tzc) / SPACING;
-            }
-            return res;
-        }
-
-        [SkipLocalsInit]
-        public static string GetString(T n, int digitCount = 0) {
-            Span<char> buffer = stackalloc char[40];
-            if (digitCount == 0)
-                digitCount = Math.Max(1, (int.CreateTruncating(T.Log2(n)) + (SPACING - 1)) / SPACING);
-
-            var ten = T.CreateTruncating(10);
-            var write = buffer.Length;
-            for (var i = digitCount - 1; i >= 0; --i) {
-                var digitBits = n >>> i * SPACING & LEAST_SIGNIFICANT_DIGIT_MASK;
-                if (digitBits == T.Zero) {
-                    buffer[--write] = '0';
-                    buffer[--write] = ',';
-                    continue;
-                }
-
-                while (digitBits != T.Zero) {
-                    (digitBits, var digit) = T.DivRem(digitBits, ten);
-                    buffer[--write] = (char)(uint.CreateTruncating(digit) | '0');
-                }
-                buffer[--write] = ',';
-            }
-
-            return new(buffer[(write + 1)..]);
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static void FreeMemory() {
+            if (buffer is null)
+                return;
+            NativeMemory.AlignedFree(buffer);
+            buffer = null;
         }
     }
+
+
+    const int SIZE = 193;
+
+    private static readonly int[] buttonBuffer = new int[SIZE * 10];
+    private static readonly int[] joltageBuffer = new int[SIZE * 10];
+    private static readonly (Memory<int> buttons, Memory<int> joltages, uint desired)[] inputBuffer = new (Memory<int>, Memory<int>, uint)[SIZE];
 
     private readonly uint minPressesLightsSum;
     private readonly uint minPressesJoltagesSum;
 
     [SkipLocalsInit]
     public Day10() {
-        Span<int> buttonBuffer = stackalloc int[15];
-        buttonBuffer.Clear();
-        Span<int> joltageBuffer = stackalloc int[15];
-        joltageBuffer.Clear();
         Span<char> newLineDump = stackalloc char[Environment.NewLine.Length];
 
         using var reader = GetDataReader();
-        while (!reader.EndOfStream) {
+        for (int buttonsIdx = 0, joltageIdx = 0, line = 0; !reader.EndOfStream; ++line) {
             var desired = 0U;
 
             var ch = reader.Read();
@@ -127,38 +62,50 @@ internal unsafe sealed class Day10 : DayBase {
             reader.Read();
             ch = reader.Read();
             Debug.Assert(ch == ' ');
-            var buttons = ReadButtons(reader, buttonBuffer);
-            var joltages = ReadJoltages(reader, joltageBuffer);
+            var buttons = ReadButtons(reader, buttonBuffer.AsMemory(buttonsIdx));
+            var joltages = ReadJoltages(reader, joltageBuffer.AsMemory(joltageIdx));
             reader.Read(newLineDump);
 
-            var (joltageMin, lightsMin) = joltages.Length switch {
+            inputBuffer[line] = (buttons, joltages, desired);
+            buttonsIdx += buttons.Length;
+            joltageIdx += joltages.Length;
+        }
+
+        var (localJoltageSum, localLightsSum) = (0U, 0U);
+        Parallel.ForEach(inputBuffer, () => (0U, 0U), (input, _, _, acc) => {
+            var (buttons, joltages, desired) = input;
+            var (joltage, lights) = joltages.Length switch {
                 <= 6 => ShortestPathJoltages<ulong>(joltages, buttons, desired),
                 _ => ShortestPathJoltages<UInt128>(joltages, buttons, desired),
             };
-            minPressesJoltagesSum += joltageMin;
-            minPressesLightsSum += lightsMin;
+            return (acc.Item1 + joltage, acc.Item2 + lights);
+        }, results => {
+            Interlocked.Add(ref localJoltageSum, results.Item1);
+            Interlocked.Add(ref localLightsSum, results.Item2);
+            SixteenSegmented.FreeMemory();
+        });
 
-            buttons.Clear();
-            joltages.Clear();
-        }
+        minPressesJoltagesSum = localJoltageSum;
+        minPressesLightsSum = localLightsSum;
     }
 
-    private static Span<int> ReadJoltages(StreamReader reader, Span<int> buffer) {
+    private static Memory<int> ReadJoltages(StreamReader reader, Memory<int> buffer) {
         var ch = reader.Read();
         Debug.Assert(ch == '{');
 
         var idx = 0;
+        var span = buffer.Span;
         for (; reader.Peek() is not (-1 or '\r' or '\n'); ++idx)
-            buffer[idx] = reader.ReadNextInt();
+            span[idx] = reader.ReadNextInt();
         return buffer.Slice(0, idx);
     }
 
-    private static Span<int> ReadButtons(StreamReader reader, Span<int> buffer) {
+    private static Memory<int> ReadButtons(StreamReader reader, Memory<int> buffer) {
         var idx = 0;
         for (; reader.Peek() == '('; ++idx) {
             reader.Read();
-            ref var n = ref buffer[idx];
-            while (reader.Peek() != ' ') {
+            ref var n = ref buffer.Span[idx];
+            for (n = 0; reader.Peek() != ' ';) {
                 n |= 1 << (reader.Read() & 0xF);
                 var ch = reader.Read();
                 Debug.Assert(ch is ',' or ')');
@@ -169,57 +116,53 @@ internal unsafe sealed class Day10 : DayBase {
     }
 
     [SkipLocalsInit]
-    private static (uint joltage, uint lights) ShortestPathJoltages<T>(ReadOnlySpan<int> joltages, ReadOnlySpan<int> buttons, uint lights) where T : unmanaged, IBinaryInteger<T> {
-        Span<T> wideButtons = stackalloc T[buttons.Length];
+    private static (uint joltage, uint lights) ShortestPathJoltages<T>(ReadOnlyMemory<int> joltages, ReadOnlyMemory<int> buttons, uint lights) where T : unmanaged, IBinaryInteger<T> {
+        var wideButtons = stackalloc T[buttons.Length];
+        var buttonSpan = buttons.Span;
         for (var i = 0; i < buttons.Length; ++i) {
-            wideButtons[i] = WideBits<T>.Expand((uint)buttons[i]);
-            Debug.Assert((uint)buttons[i] == WideBits<T>.CompressParity(wideButtons[i]));
+            wideButtons[i] = SWARHelper<T>.Expand((uint)buttonSpan[i]);
+            Debug.Assert((uint)buttonSpan[i] == SWARHelper<T>.CompressParity(wideButtons[i]));
         }
 
-        var maskEnd = 1 << wideButtons.Length;
-        Span<T> combs = stackalloc T[maskEnd];
+        var maskEnd = 1 << buttons.Length;
+        var combs = stackalloc T[maskEnd];
         combs[0] = T.Zero;
-        var parityMap = new List<uint>[1 << joltages.Length];
-        (parityMap[0] = []).Add(0);
+        SixteenSegmented parityMap = new(1 << joltages.Length);
+        parityMap.Add(0, 0);
         var minLights = uint.MaxValue;
 
         for (var mask = 1U; mask < maskEnd; ++mask) {
             var log = BitOperations.Log2(mask);
             var msb = 1U << log;
-            var val = combs[(int)mask] = combs[(int)(mask ^ msb)] + wideButtons[log];
-            Debug.Assert((val & WideBits<T>.BORROW_MASK) == T.Zero);
-            var valParity = WideBits<T>.CompressParity(val);
-            Debug.Assert(uint.CreateChecked(T.PopCount(WideBits<T>.PARITY_MASK & val)) == Popcnt.PopCount(valParity));
-            (parityMap[valParity] ??= []).Add(mask);
+            var val = combs[mask] = combs[mask ^ msb] + wideButtons[log];
+            Debug.Assert((val & SWARHelper<T>.BORROW_MASK) == T.Zero);
+            var valParity = SWARHelper<T>.CompressParity(val);
+            Debug.Assert(uint.CreateChecked(T.PopCount(SWARHelper<T>.PARITY_MASK & val)) == Popcnt.PopCount(valParity));
+            parityMap.Add(valParity, mask);
             if (valParity == lights)
                 minLights = Math.Min(minLights, Popcnt.PopCount(mask));
         }
-
-        var requirements = WideBits<T>.Expand(joltages);
+        var requirements = SWARHelper<T>.Expand(joltages.Span);
         return (DFS(combs, requirements, parityMap, []), minLights);
     }
 
-    private static uint DFS<T>(ReadOnlySpan<T> combs, T requirements, List<uint>[] parityMap, Dictionary<T, uint> memo) where T : unmanaged, IBinaryInteger<T> {
+    private static uint DFS<T>(T* combs, T requirements, in SixteenSegmented parityMap, Dictionary<T, uint> memo) where T : unmanaged, IBinaryInteger<T> {
         if (memo.TryGetValue(requirements, out var cached))
             return cached;
 
-        Debug.Assert((requirements & WideBits<T>.BORROW_MASK) == T.Zero);
+        Debug.Assert((requirements & SWARHelper<T>.BORROW_MASK) == T.Zero);
         if (requirements == T.Zero)
             return 0;
 
         var res = uint.MaxValue >>> 2;
-        var parity = WideBits<T>.CompressParity(requirements);
-        var lst = parityMap[parity];
-        if (lst is null)
-            return res;
-
-        for (var i = 0; i < lst.Count & res > 0; ++i) {
-            var p = lst[i];
+        var span = parityMap.AsSpan((int)SWARHelper<T>.CompressParity(requirements));
+        for (var i = 0; i < span.Length & res > 0; ++i) {
+            var p = span[i];
             var left = requirements - combs[(int)p];
-            if ((left & WideBits<T>.BORROW_MASK) != T.Zero)
+            if ((left & SWARHelper<T>.BORROW_MASK) != T.Zero)
                 continue;
 
-            Debug.Assert((left & WideBits<T>.PARITY_MASK) == T.Zero);
+            Debug.Assert((left & SWARHelper<T>.PARITY_MASK) == T.Zero);
             res = Math.Min(res, Popcnt.PopCount(p) + (DFS(combs, left >>> 1, parityMap, memo) << 1));
         }
         return memo[requirements] = res;
