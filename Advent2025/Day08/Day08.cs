@@ -14,10 +14,11 @@ internal unsafe sealed class Day08 : DayBase {
     private const int PAIR_COUNT = SIZE * SIZE - SIZE >>> 1;
     private const int INITIAL_UNION_COUNT = 1_000;
     private const int TOTAL_UNION_ESTIMATE = 4_200;
+    private const long MAX_DIST_ESTIMATE = 175_000_000;
 
     private static readonly long* dists = (long*)NativeMemory.Alloc(PAIR_COUNT, sizeof(long));
     private static readonly long* dists2 = (long*)NativeMemory.Alloc(TOTAL_UNION_ESTIMATE, sizeof(long));
-    
+
     private readonly int prodOfThreeLargest;
     private readonly int xProduct;
 
@@ -30,7 +31,7 @@ internal unsafe sealed class Day08 : DayBase {
 
         using var reader = GetDataReader();
 
-        Span<Vec> points = stackalloc Vec[SIZE];
+        var points = stackalloc Vec[SIZE];
         var dsuBytes = stackalloc byte[(SIZE << 2) + (sizeof(Vector256<ushort>) << 1)];
         var dsuBuffer = getNextAligned(dsuBytes);
         var countsBuffer = getNextAligned((byte*)(dsuBuffer + SIZE));
@@ -38,13 +39,22 @@ internal unsafe sealed class Day08 : DayBase {
         for (var write = 0; !reader.EndOfStream; ++write)
             points[write] = new(reader.ReadNextInt(), reader.ReadNextInt(), reader.ReadNextInt());
 
-        for (var (i, pairIdx) = (0L, 0); i < SIZE; ++i) {
-            ref var a = ref points[(int)i];
-            for (var j = i + 1; j < SIZE; ++j, ++pairIdx)
-                dists[pairIdx] = a.SquaredDistanceTo<long>(points[(int)j]) << 20 | i << 10 | j;
+
+        var distLen = 0;
+        for (var i = 0L; i < SIZE; ++i) {
+            //Parallel.For(0L, (long)SIZE - 1, new() { MaxDegreeOfParallelism = -1 }, i => {
+            ref readonly var a = ref points[(int)i];
+            var startIdx = GetSumOfConsecutive(SIZE - 1 - i, SIZE - 1);
+            for (var j = i + 1; j < SIZE; ++j) {
+                var sqDist = a.SquaredDistanceTo<long>(points[(int)j]);
+                if (sqDist < MAX_DIST_ESTIMATE)
+                    dists[distLen++] = sqDist << 20 | i << 10 | j;
+            }
         }
 
-        var sorted = SortSmallest(dists, dists2, PAIR_COUNT, TOTAL_UNION_ESTIMATE);
+        //var sorted = SortSmallest(dists, dists2, PAIR_COUNT, TOTAL_UNION_ESTIMATE);
+        var sorted = Sort(dists, dists2, distLen);
+        //var kth = QuickSelectLargest(dists, dists, dists + (PAIR_COUNT - 1), PAIR_COUNT - TOTA);
 
         DSU dsu = new(dsuBuffer, countsBuffer, SIZE);
         const long IDX_MASK = 0x3FF;
@@ -54,31 +64,39 @@ internal unsafe sealed class Day08 : DayBase {
             dsu.Union(a, b);
         }
 
-        var sizes = stackalloc ushort[SIZE];
-        var sizesEnd = sizes - 1;
-        for (ushort i = 0; i < SIZE; ++i) {
-            var id = dsu.Find(i);
-            if (id != i)
-                continue;
-            var c = countsBuffer[id];
-            if (c > 1)
-                *++sizesEnd = c;
+        var (gA, gB, gC) = (1, 1, 1);
+        for (var i = 0; i < SIZE; ++i) {
+            var count = countsBuffer[i];
+            if (count > gA)
+                (gC, gB, gA) = (gB, gA, count);
+            else if (count > gB)
+                (gC, gB) = (gB, count);
+            else if (count > gC)
+                gC = count;
         }
 
-        Debug.Assert(sizesEnd - sizes >= 2);
-        QuickSelectLargest(sizes, sizes, sizesEnd, 3);
-        prodOfThreeLargest = *sizes * sizes[1] * sizes[2];
+        //Debug.Assert(sizesEnd - sizes >= 2);
+        //QuickSelectLargest(sizes, sizes, sizesEnd, 3);
+        prodOfThreeLargest = gA * gB * gC;
+
 
         for (var i = INITIAL_UNION_COUNT; true; ++i) {
-            Debug.Assert(i < TOTAL_UNION_ESTIMATE);
+            Debug.Assert(i < distLen);
             var packed = sorted[i];
             var (a, b) = ((ushort)(packed >>> 10 & IDX_MASK), (ushort)(packed & IDX_MASK));
             dsu.Union(a, b);
             if (countsBuffer[a] == SIZE) {
                 xProduct = points[a].x * points[b].x;
+                //var maxDist = packed >>> 20;
+                //Console.WriteLine($"Furthest: {maxDist}");
                 break;
             }
         }
+    }
+
+    private static long GetSumOfConsecutive(long lower, long upper) {
+        var count = upper - lower;
+        return count * (lower + upper + 1) >>> 1;
     }
 
     private static T QuickSelectLargest<T>(T* data, T* left, T* right, int k) where T : unmanaged, IComparisonOperators<T, T, bool> {
@@ -120,8 +138,8 @@ internal unsafe sealed class Day08 : DayBase {
             if (*curr <= kth)
                 *++write = *curr;
         }
-        
-        if ( k < 5) {
+
+        if (k < 500) {
             new Span<T>(nums, k).Sort();
             return nums;
         }
@@ -131,7 +149,7 @@ internal unsafe sealed class Day08 : DayBase {
 
     [MethodImpl(MethodImplOptions.AggressiveOptimization)]
     public static T* Sort<T>(T* nums, T* buffer, int len) where T : unmanaged, IBinaryInteger<T> {
-        const int EXP = 8;
+        const int EXP = 12;
         const int COUNTS_LEN = 1 << EXP;
         const int SET_LEN = 1 << (EXP - 6);
 

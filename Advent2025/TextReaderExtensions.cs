@@ -14,13 +14,14 @@ public static class TextReaderExtensions {
 
     public static byte ReadNextByte(this TextReader r) => r.ReadNextNumber<byte>().parsed;
 
+    [SkipLocalsInit]
     public static (T parsed, int lastRead) ReadNextNumber<T>(this TextReader r) where T : ISpanParsable<T> {
         // Should be enough space for up to long.MinValue
         Span<char> buffer = stackalloc char[20];
         var bufferPos = -1;
         int nextVal = r.ReadToNonWhiteSpace();
-        while (nextVal != -1 && !char.IsWhiteSpace((char)nextVal) &&
-            (char.IsDigit((char)nextVal) || (bufferPos == -1 && (nextVal is '-' or '+')))) {
+        while (nextVal != -1 & !char.IsWhiteSpace((char)nextVal) &
+            (char.IsDigit((char)nextVal) | (bufferPos == -1 & (nextVal is '-' or '+')))) {
             buffer[++bufferPos] = (char)nextVal;
             nextVal = r.Read();
         }
@@ -56,7 +57,7 @@ public static class TextReaderExtensions {
 
     public static int ReadToNonWhiteSpace(this TextReader r) {
         int nextVal;
-        while ((nextVal = r.Read()) != -1 && char.IsWhiteSpace((char)nextVal)) ;
+        while ((nextVal = r.Read()) != -1 & char.IsWhiteSpace((char)nextVal)) ;
         return nextVal;
     }
 
@@ -111,11 +112,11 @@ public static class TextReaderExtensions {
         while ((nextVal = r.Read()) != -1 && !char.IsWhiteSpace((char)nextVal)) ;
     }
 
-    public static Span<char> ReadUntil(this TextReader r, char stopAfter, Span<char> buffer) {
+    public static Span<T> ReadUntil<T>(this TextReader r, char stopAfter, Span<T> buffer) where T : IEquatable<T>, INumber<T> {
         int nextVal;
         var idx = -1;
         while ((nextVal = r.Read()) != -1 && nextVal != stopAfter)
-            buffer[++idx] = (char)nextVal;
+            buffer[++idx] = T.CreateTruncating(nextVal);
         return buffer[..(idx + 1)];
     }
 

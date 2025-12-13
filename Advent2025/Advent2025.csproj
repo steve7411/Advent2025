@@ -43,14 +43,4 @@
 		</None>
 	</ItemGroup>
 
-	<ItemGroup>
-		<Folder Include="Day09\" />
-		<Folder Include="Day10\" />
-		<Folder Include="Day11\" />
-		<Folder Include="Day12\" />
-		<Folder Include="Day13\" />
-		<Folder Include="Day14\" />
-		<Folder Include="Day15\" />
-	</ItemGroup>
-
 </Project>
