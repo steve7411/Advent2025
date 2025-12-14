@@ -76,7 +76,7 @@ internal unsafe sealed class Day10 : DayBase {
         }
 
         var (localJoltageSum, localLightsSum) = (0U, 0U);
-        Parallel.ForEach(inputBuffer, () => (0U, 0U), (input, _, _, acc) => {
+        Parallel.ForEach(inputBuffer, new() { MaxDegreeOfParallelism = -1 }, () => (0U, 0U), (input, _, _, acc) => {
             var (buttons, joltages, desired) = input;
             var (joltage, lights) = joltages.Length switch {
                 <= 6 => ShortestPathJoltages<ulong>(joltages, buttons, desired),
@@ -106,9 +106,10 @@ internal unsafe sealed class Day10 : DayBase {
 
     private static ReadOnlyMemory<int> ReadButtons(StreamReader reader, Memory<int> buffer) {
         var idx = 0;
+        var span = buffer.Span;
         for (; reader.Peek() == '('; ++idx) {
             reader.Read();
-            ref var n = ref buffer.Span[idx];
+            ref var n = ref span[idx];
             for (n = 0; reader.Peek() != ' ';) {
                 n |= 1 << (reader.Read() & 0xF);
                 var ch = reader.Read();
@@ -135,18 +136,19 @@ internal unsafe sealed class Day10 : DayBase {
         parityMap.Add(0, 0);
         var minLights = uint.MaxValue >>> 2;
 
-        for (var mask = 1U; mask < maskEnd; ++mask) {
-            var log = BitOperations.Log2(mask);
-            var msb = 1U << log;
-            var val = combs[mask] = combs[mask ^ msb] + wideButtons[log];
-            Debug.Assert((val & SWARHelper<T>.BORROW_MASK) == T.Zero);
-            var valParity = SWARHelper<T>.CompressParity(val);
-            Debug.Assert(uint.CreateChecked(T.PopCount(SWARHelper<T>.PARITY_MASK & val)) == Popcnt.PopCount(valParity));
-            parityMap.Add(valParity, mask);
-            if (valParity == lights) {
-                var minSteps = MathUtils.Min(minLights, Popcnt.PopCount(mask));
-                Debug.Assert(minSteps <= minLights & minSteps <= Popcnt.PopCount(mask));
-                minLights = minSteps;
+        for (uint msb = 1, log = 0; msb < maskEnd; msb <<= 1, ++log) {
+            for (var lowBits = 0U; lowBits < msb; ++lowBits) {
+                var bits = msb | lowBits;
+                var val = combs[bits] = combs[lowBits] + wideButtons[log];
+                Debug.Assert((val & SWARHelper<T>.BORROW_MASK) == T.Zero);
+                var valParity = SWARHelper<T>.CompressParity(val);
+                Debug.Assert(uint.CreateChecked(T.PopCount(SWARHelper<T>.PARITY_MASK & val)) == Popcnt.PopCount(valParity));
+                parityMap.Add(valParity, bits);
+                if (valParity == lights) {
+                    var minSteps = MathUtils.Min(minLights, Popcnt.PopCount(bits));
+                    Debug.Assert(minSteps <= minLights & minSteps <= Popcnt.PopCount(bits));
+                    minLights = minSteps;
+                }
             }
         }
         var requirements = SWARHelper<T>.Expand(joltages.Span);

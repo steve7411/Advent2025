@@ -13,25 +13,21 @@ internal sealed class Day02 : DayBase {
     private readonly ulong symmetricSum;
     private readonly ulong repeatingSum;
 
-    [SkipLocalsInit]
     public Day02() {
         using var reader = GetDataReader();
-
-        Span<char> buffer = stackalloc char[10];
         for (var write = 0; !reader.EndOfStream; ++write) {
-            var sp = reader.ReadUntil('-', buffer);
-            var startBCD = ReadBCD(sp);
-            sp = reader.ReadUntil(',', buffer);
-            var endBCD = ReadBCD(sp);
+            var startBCD = ReadBCD(reader);
+            var endBCD = ReadBCD(reader);
             symmetricSum += GetSymmetricSumForRange(startBCD, endBCD);
             repeatingSum += GetRepeatingSumForRange(startBCD, endBCD);
         }
     }
 
-    private static ulong ReadBCD(ReadOnlySpan<char> span) {
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static ulong ReadBCD(StreamReader reader) {
         var res = 0UL;
-        for (var i = 0; i < span.Length; ++i)
-            res = res << 4 | span[i] & 0xFU;
+        for (var digit = (ulong)reader.Read() & 0xF; digit < 10; digit = (ulong)reader.Read() & 0xF)
+            res = res << 4 | digit;
         return res;
     }
 
