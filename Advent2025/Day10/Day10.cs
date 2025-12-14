@@ -6,42 +6,46 @@ using System.Runtime.Intrinsics.X86;
 
 namespace Advent2025.Day10;
 
-internal unsafe sealed class Day10 : DayBase {
-    private readonly ref struct SixteenSegmented {
-        private const int MAX_SIZE = 1 << 10;
+internal readonly unsafe ref struct SixteenSegmentedMemory {
+    private const int MAX_JOLTAGE = 10;
+    private const int MAX_SIZE = 1 << MAX_JOLTAGE;
+    private const int ENDS_PADDING_INT_COUNT = 64 / sizeof(uint);
 
-        [ThreadStatic]
-        private static uint* buffer;
-        private readonly uint* lensStart;
+    [ThreadStatic]
+    private static uint* baseAddr;
+    private readonly uint* lens;
+    private readonly uint* data;
 
-        public SixteenSegmented(int len) {
-            if (buffer is null)
-                buffer = (uint*)NativeMemory.AlignedAlloc(((MAX_SIZE << 4) + MAX_SIZE) * sizeof(uint), sizeof(uint));
-            lensStart = buffer + (len << 4);
-            NativeMemory.Clear(lensStart, (nuint)(len * sizeof(uint)));
-        }
+    public SixteenSegmentedMemory(int len) {
+        if (baseAddr is null)
+            baseAddr = (uint*)NativeMemory.AlignedAlloc(((MAX_SIZE << 4) + MAX_SIZE + ENDS_PADDING_INT_COUNT * 2) * sizeof(uint), sizeof(uint));
 
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public void Add(uint idx, uint val) => buffer[idx << 4 | lensStart[idx]++] = val;
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public ReadOnlySpan<uint> AsSpan(int idx) => new(buffer + (idx << 4), (int)lensStart[idx]);
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static void FreeMemory() {
-            if (buffer is null)
-                return;
-            NativeMemory.AlignedFree(buffer);
-            buffer = null;
-        }
+        lens = baseAddr + ENDS_PADDING_INT_COUNT;
+        data = lens + MAX_SIZE;
+        NativeMemory.Clear(lens, (nuint)(len * sizeof(uint)));
     }
 
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public void Add(uint idx, uint val) => data[idx << 4 | lens[idx]++] = val;
 
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public ReadOnlySpan<uint> AsSpan(int idx) => new(data + (idx << 4), (int)lens[idx]);
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static void FreeMemory() {
+        if (baseAddr is not null) {
+            NativeMemory.AlignedFree(baseAddr);
+            baseAddr = null;
+        }
+    }
+}
+
+internal unsafe sealed class Day10 : DayBase {
     const int SIZE = 193;
 
     private static readonly int[] buttonBuffer = new int[SIZE * 10];
     private static readonly int[] joltageBuffer = new int[SIZE * 10];
-    private static readonly (Memory<int> buttons, Memory<int> joltages, uint desired)[] inputBuffer = new (Memory<int>, Memory<int>, uint)[SIZE];
+    private static readonly (ReadOnlyMemory<int> buttons, ReadOnlyMemory<int> joltages, uint desired)[] inputBuffer = new (ReadOnlyMemory<int>, ReadOnlyMemory<int>, uint)[SIZE];
 
     private readonly uint minPressesLightsSum;
     private readonly uint minPressesJoltagesSum;
@@ -82,14 +86,14 @@ internal unsafe sealed class Day10 : DayBase {
         }, results => {
             Interlocked.Add(ref localJoltageSum, results.Item1);
             Interlocked.Add(ref localLightsSum, results.Item2);
-            SixteenSegmented.FreeMemory();
+            SixteenSegmentedMemory.FreeMemory();
         });
 
         minPressesJoltagesSum = localJoltageSum;
         minPressesLightsSum = localLightsSum;
     }
 
-    private static Memory<int> ReadJoltages(StreamReader reader, Memory<int> buffer) {
+    private static ReadOnlyMemory<int> ReadJoltages(StreamReader reader, Memory<int> buffer) {
         var ch = reader.Read();
         Debug.Assert(ch == '{');
 
@@ -100,7 +104,7 @@ internal unsafe sealed class Day10 : DayBase {
         return buffer.Slice(0, idx);
     }
 
-    private static Memory<int> ReadButtons(StreamReader reader, Memory<int> buffer) {
+    private static ReadOnlyMemory<int> ReadButtons(StreamReader reader, Memory<int> buffer) {
         var idx = 0;
         for (; reader.Peek() == '('; ++idx) {
             reader.Read();
@@ -127,9 +131,9 @@ internal unsafe sealed class Day10 : DayBase {
         var maskEnd = 1 << buttons.Length;
         var combs = stackalloc T[maskEnd];
         combs[0] = T.Zero;
-        SixteenSegmented parityMap = new(1 << joltages.Length);
+        SixteenSegmentedMemory parityMap = new(1 << joltages.Length);
         parityMap.Add(0, 0);
-        var minLights = uint.MaxValue;
+        var minLights = uint.MaxValue >>> 2;
 
         for (var mask = 1U; mask < maskEnd; ++mask) {
             var log = BitOperations.Log2(mask);
@@ -139,14 +143,17 @@ internal unsafe sealed class Day10 : DayBase {
             var valParity = SWARHelper<T>.CompressParity(val);
             Debug.Assert(uint.CreateChecked(T.PopCount(SWARHelper<T>.PARITY_MASK & val)) == Popcnt.PopCount(valParity));
             parityMap.Add(valParity, mask);
-            if (valParity == lights)
-                minLights = Math.Min(minLights, Popcnt.PopCount(mask));
+            if (valParity == lights) {
+                var minSteps = MathUtils.Min(minLights, Popcnt.PopCount(mask));
+                Debug.Assert(minSteps <= minLights & minSteps <= Popcnt.PopCount(mask));
+                minLights = minSteps;
+            }
         }
         var requirements = SWARHelper<T>.Expand(joltages.Span);
         return (DFS(combs, requirements, parityMap, []), minLights);
     }
 
-    private static uint DFS<T>(T* combs, T requirements, in SixteenSegmented parityMap, Dictionary<T, uint> memo) where T : unmanaged, IBinaryInteger<T> {
+    private static uint DFS<T>(T* combs, T requirements, in SixteenSegmentedMemory parityMap, Dictionary<T, uint> memo) where T : unmanaged, IBinaryInteger<T> {
         if (memo.TryGetValue(requirements, out var cached))
             return cached;
 
@@ -163,7 +170,7 @@ internal unsafe sealed class Day10 : DayBase {
                 continue;
 
             Debug.Assert((left & SWARHelper<T>.PARITY_MASK) == T.Zero);
-            res = Math.Min(res, Popcnt.PopCount(p) + (DFS(combs, left >>> 1, parityMap, memo) << 1));
+            res = MathUtils.Min(res, Popcnt.PopCount(p) + (DFS(combs, left >>> 1, parityMap, memo) << 1));
         }
         return memo[requirements] = res;
     }

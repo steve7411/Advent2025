@@ -114,4 +114,28 @@ internal static class MathUtils {
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static int Log10BCD(ulong numBCD) => BitOperations.Log2(numBCD) + 4 >>> 2;
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static int Abs(int n) {
+        var mask = n >> 31;
+        return (n ^ mask) - mask;
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static int Max(int a, int b) {
+        var ltMask = a - b >> 31;
+        return a & ~ltMask | b & ltMask;
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static int Min(int a, int b) {
+        var gtMask = b - a >> 31;
+        return a & ~gtMask | b & gtMask;
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static uint Min(uint a, uint b) {
+        var gtMask = (uint)(((int)b - (int)a) >> 31);
+        return a & ~gtMask | b & gtMask;
+    }
 }

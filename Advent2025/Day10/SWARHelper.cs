@@ -17,6 +17,8 @@ public static class SWARHelper<T> where T : unmanaged, IBinaryInteger<T> {
     public static readonly T LEAST_SIGNIFICANT_DIGIT_MASK = (T.One << SPACING) - T.One;
 
     static unsafe SWARHelper() {
+        Debug.Assert(typeof(T) == typeof(ulong) || typeof(T) == typeof(UInt128));
+
         var totalWidth = int.CreateTruncating(T.LeadingZeroCount(T.Zero));
         var width = totalWidth - totalWidth % SPACING;
         PARITY_MASK = T.One;
@@ -26,14 +28,16 @@ public static class SWARHelper<T> where T : unmanaged, IBinaryInteger<T> {
         BORROW_MASK = PARITY_MASK << SPACING - 1;
         DIGIT_MASK = BORROW_MASK - PARITY_MASK;
 
+        LOW_PARITY = ulong.CreateTruncating(PARITY_MASK);
+
         Debug.Assert(BitConverter.IsLittleEndian);
         if (PARITY_MASK is UInt128 parity) {
             var lower = (ulong*)&parity;
-            LOW_PARITY = *lower;
             HIGH_PARITY = lower[1];
         }
     }
 
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static T Expand(ReadOnlySpan<int> ints) {
         var res = T.Zero;
         var max = (1 << SPACING - 1) - 1;
@@ -44,39 +48,27 @@ public static class SWARHelper<T> where T : unmanaged, IBinaryInteger<T> {
         return res;
     }
 
-    public static T Expand(uint n) {
-        if (typeof(T) == typeof(ulong))
-            return T.CreateTruncating(Bmi2.X64.ParallelBitDeposit(n, ulong.CreateTruncating(PARITY_MASK)));
-        else if (typeof(T) == typeof(UInt128)) {
-            UInt128 value = new(Bmi2.X64.ParallelBitDeposit(n >>> 7, HIGH_PARITY), Bmi2.X64.ParallelBitDeposit(n, LOW_PARITY));
-            return T.CreateTruncating(value);
-        }
+    public static unsafe T Expand(uint n) {
+        var low = Bmi2.X64.ParallelBitDeposit(n, LOW_PARITY);
+        if (sizeof(T) == 8)
+            return Unsafe.As<ulong, T>(ref low);
 
-        var res = T.Zero;
-        for (; n != 0; n = Bmi1.ResetLowestSetBit(n)) {
-            var tzc = Bmi1.TrailingZeroCount(n);
-            res |= T.One << (int)tzc * SPACING;
-        }
-        return res;
+        Debug.Assert(sizeof(T) == 16);
+        UInt128 value = new(Bmi2.X64.ParallelBitDeposit(n >>> 7, HIGH_PARITY), low);
+        return Unsafe.As<UInt128, T>(ref value);
     }
 
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static unsafe uint CompressParity(T n) {
         n &= PARITY_MASK;
-        if (typeof(T) == typeof(ulong))
-            return (uint)Bmi2.X64.ParallelBitExtract(Unsafe.As<T, ulong>(ref n), Unsafe.As<T, ulong>(ref Unsafe.AsRef(in PARITY_MASK)));
-        else if (typeof(T) == typeof(UInt128)) {
-            var lower = (ulong*)&n;
-            var high = Bmi2.X64.ParallelBitExtract(lower[1], HIGH_PARITY) << 7;
-            var low = Bmi2.X64.ParallelBitExtract(*lower, LOW_PARITY);
-            return (uint)(high | low);
-        }
+        var lower = (ulong*)&n;
+        var low = Bmi2.X64.ParallelBitExtract(*lower, LOW_PARITY);
+        if (sizeof(T) == 8)
+            return (uint)low;
 
-        var res = 0U;
-        for (; n != T.Zero; n &= n - T.One) {
-            var tzc = T.TrailingZeroCount(n);
-            res |= 1U << int.CreateTruncating(tzc) / SPACING;
-        }
-        return res;
+        Debug.Assert(sizeof(T) == 16);
+        var high = Bmi2.X64.ParallelBitExtract(lower[1], HIGH_PARITY) << 7;
+        return (uint)(high | low);
     }
 
     [SkipLocalsInit]
