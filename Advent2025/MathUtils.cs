@@ -135,6 +135,7 @@ internal static class MathUtils {
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static uint Min(uint a, uint b) {
+        Debug.Assert(a < 1U << 31);
         var gtMask = (uint)(((int)b - (int)a) >> 31);
         return a & ~gtMask | b & gtMask;
     }

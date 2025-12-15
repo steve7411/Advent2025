@@ -50,7 +50,7 @@ public static class SWARHelper<T> where T : unmanaged, IBinaryInteger<T> {
 
     public static unsafe T Expand(uint n) {
         var low = Bmi2.X64.ParallelBitDeposit(n, LOW_PARITY);
-        if (sizeof(T) == 8)
+        if (typeof(T) == typeof(ulong))
             return Unsafe.As<ulong, T>(ref low);
 
         Debug.Assert(sizeof(T) == 16);
@@ -63,7 +63,7 @@ public static class SWARHelper<T> where T : unmanaged, IBinaryInteger<T> {
         n &= PARITY_MASK;
         var lower = (ulong*)&n;
         var low = Bmi2.X64.ParallelBitExtract(*lower, LOW_PARITY);
-        if (sizeof(T) == 8)
+        if (typeof(T) == typeof(ulong))
             return (uint)low;
 
         Debug.Assert(sizeof(T) == 16);

@@ -9,27 +9,27 @@ namespace Advent2025.Day10;
 internal readonly unsafe ref struct SixteenSegmentedMemory {
     private const int MAX_JOLTAGE = 10;
     private const int MAX_SIZE = 1 << MAX_JOLTAGE;
-    private const int ENDS_PADDING_INT_COUNT = 64 / sizeof(uint);
+    private const int ENDS_PADDING_INT_COUNT = 64 / sizeof(ushort);
 
     [ThreadStatic]
-    private static uint* baseAddr;
-    private readonly uint* lens;
-    private readonly uint* data;
+    private static ushort* baseAddr;
+    private readonly ushort* lens;
+    private readonly ushort* data;
 
     public SixteenSegmentedMemory(int len) {
         if (baseAddr is null)
-            baseAddr = (uint*)NativeMemory.AlignedAlloc(((MAX_SIZE << 4) + MAX_SIZE + ENDS_PADDING_INT_COUNT * 2) * sizeof(uint), sizeof(uint));
+            baseAddr = (ushort*)NativeMemory.AlignedAlloc(((MAX_SIZE << 4) + MAX_SIZE + ENDS_PADDING_INT_COUNT * 2) * sizeof(ushort), sizeof(ushort));
 
         lens = baseAddr + ENDS_PADDING_INT_COUNT;
         data = lens + MAX_SIZE;
-        NativeMemory.Clear(lens, (nuint)(len * sizeof(uint)));
+        NativeMemory.Clear(lens, (nuint)(len * sizeof(ushort)));
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public void Add(uint idx, uint val) => data[idx << 4 | lens[idx]++] = val;
+    public void Add(uint idx, ushort val) => data[idx << 4 | lens[idx]++] = val;
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public ReadOnlySpan<uint> AsSpan(int idx) => new(data + (idx << 4), (int)lens[idx]);
+    public ReadOnlySpan<ushort> AsSpan(int idx) => new(data + (idx << 4), lens[idx]);
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static void FreeMemory() {
@@ -143,7 +143,7 @@ internal unsafe sealed class Day10 : DayBase {
                 Debug.Assert((val & SWARHelper<T>.BORROW_MASK) == T.Zero);
                 var valParity = SWARHelper<T>.CompressParity(val);
                 Debug.Assert(uint.CreateChecked(T.PopCount(SWARHelper<T>.PARITY_MASK & val)) == Popcnt.PopCount(valParity));
-                parityMap.Add(valParity, bits);
+                parityMap.Add(valParity, (ushort)bits);
                 if (valParity == lights) {
                     var minSteps = MathUtils.Min(minLights, Popcnt.PopCount(bits));
                     Debug.Assert(minSteps <= minLights & minSteps <= Popcnt.PopCount(bits));
@@ -166,8 +166,8 @@ internal unsafe sealed class Day10 : DayBase {
         var res = uint.MaxValue >>> 2;
         var span = parityMap.AsSpan((int)SWARHelper<T>.CompressParity(requirements));
         for (var i = 0; i < span.Length & res > 0; ++i) {
-            var p = span[i];
-            var left = requirements - combs[(int)p];
+            var p = (uint)span[i];
+            var left = requirements - combs[p];
             if ((left & SWARHelper<T>.BORROW_MASK) != T.Zero)
                 continue;
 
