@@ -3,7 +3,7 @@
 Console.WriteLine();
 
 //RunAllDays();
-//for (var i = 0; i < 10; i++)
+//for (var i = 0; i < 200; i++)
 RunDay(10);
 //RunLatestDay();
 //RunDay<Advent2025.Day05.Day05>();

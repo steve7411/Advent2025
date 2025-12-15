@@ -9,7 +9,7 @@ namespace Advent2025.Day10;
 internal readonly unsafe ref struct SixteenSegmentedMemory {
     private const int MAX_JOLTAGE = 10;
     private const int MAX_SIZE = 1 << MAX_JOLTAGE;
-    private const int ENDS_PADDING_INT_COUNT = 64 / sizeof(ushort);
+    private const int ENDS_PADDING_COUNT = 64 / sizeof(ushort);
 
     [ThreadStatic]
     private static ushort* baseAddr;
@@ -18,18 +18,27 @@ internal readonly unsafe ref struct SixteenSegmentedMemory {
 
     public SixteenSegmentedMemory(int len) {
         if (baseAddr is null)
-            baseAddr = (ushort*)NativeMemory.AlignedAlloc(((MAX_SIZE << 4) + MAX_SIZE + ENDS_PADDING_INT_COUNT * 2) * sizeof(ushort), sizeof(ushort));
+            baseAddr = (ushort*)NativeMemory.AlignedAlloc(((MAX_SIZE << 4) + MAX_SIZE + ENDS_PADDING_COUNT * 2) * sizeof(ushort), sizeof(ushort));
 
-        lens = baseAddr + ENDS_PADDING_INT_COUNT;
-        data = lens + MAX_SIZE;
+        lens = baseAddr + ENDS_PADDING_COUNT;
+        data = lens + len;
         NativeMemory.Clear(lens, (nuint)(len * sizeof(ushort)));
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public void Add(uint idx, ushort val) => data[idx << 4 | lens[idx]++] = val;
+    public readonly void Add(uint idx, ushort val) {
+        Debug.Assert(lens[idx] < 16);
+        data[idx << 4 | lens[idx]++] = val;
+    }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public ReadOnlySpan<ushort> AsSpan(int idx) => new(data + (idx << 4), lens[idx]);
+    public readonly ReadOnlySpan<ushort> AsSpan(int idx) => new(data + (idx << 4), lens[idx]);
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public readonly ushort* GetSegment(int idx, out uint length) {
+        length = lens[idx];
+        return data + (idx << 4);
+    }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static void FreeMemory() {
@@ -76,6 +85,8 @@ internal unsafe sealed class Day10 : DayBase {
         }
 
         var (localJoltageSum, localLightsSum) = (0U, 0U);
+        //Parallel.For(0, inputBuffer.Length, new() { MaxDegreeOfParallelism = -1 }, () => (0U, 0U), (i, _, acc) => {
+        //    ref var input = ref inputBuffer[i];
         Parallel.ForEach(inputBuffer, new() { MaxDegreeOfParallelism = -1 }, () => (0U, 0U), (input, _, _, acc) => {
             var (buttons, joltages, desired) = input;
             var (joltage, lights) = joltages.Length switch {
@@ -164,9 +175,9 @@ internal unsafe sealed class Day10 : DayBase {
             return 0;
 
         var res = uint.MaxValue >>> 2;
-        var span = parityMap.AsSpan((int)SWARHelper<T>.CompressParity(requirements));
-        for (var i = 0; i < span.Length & res > 0; ++i) {
-            var p = (uint)span[i];
+        var first = parityMap.GetSegment((int)SWARHelper<T>.CompressParity(requirements), out var length);
+        for (var end = first + length; first < end; ++first) {
+            var p = (uint)*first;
             var left = requirements - combs[p];
             if ((left & SWARHelper<T>.BORROW_MASK) != T.Zero)
                 continue;
