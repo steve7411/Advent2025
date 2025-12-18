@@ -1,5 +1,6 @@
 ﻿using System.Diagnostics;
 using System.Numerics;
+using System.Numerics.Tensors;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Runtime.Intrinsics.X86;
@@ -35,9 +36,10 @@ internal readonly unsafe ref struct SixteenSegmentedMemory {
     public readonly ReadOnlySpan<ushort> AsSpan(int idx) => new(data + (idx << 4), lens[idx]);
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public readonly ushort* GetSegment(int idx, out uint length) {
-        length = lens[idx];
-        return data + (idx << 4);
+    public readonly ushort* GetSegment(int idx, out ushort* end) {
+        var start = data + (idx << 4);
+        end = start + lens[idx];
+        return start;
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -51,6 +53,7 @@ internal readonly unsafe ref struct SixteenSegmentedMemory {
 
 internal unsafe sealed class Day10 : DayBase {
     const int SIZE = 193;
+    const int MAX_SEARCH_ROW_LEN = 339;
 
     private static readonly int[] buttonBuffer = new int[SIZE * 10];
     private static readonly int[] joltageBuffer = new int[SIZE * 10];
@@ -133,40 +136,116 @@ internal unsafe sealed class Day10 : DayBase {
 
     [SkipLocalsInit]
     private static (uint joltage, uint lights) ShortestPathJoltages<T>(ReadOnlyMemory<int> joltages, ReadOnlyMemory<int> buttons, uint lights) where T : unmanaged, IBinaryInteger<T> {
-        var wideButtons = stackalloc T[buttons.Length];
         var buttonSpan = buttons.Span;
-        for (var i = 0; i < buttons.Length; ++i) {
-            wideButtons[i] = SWARHelper<T>.Expand((uint)buttonSpan[i]);
-            Debug.Assert((uint)buttonSpan[i] == SWARHelper<T>.CompressParity(wideButtons[i]));
-        }
-
         var maskEnd = 1 << buttons.Length;
         var combs = stackalloc T[maskEnd];
-        combs[0] = T.Zero;
-        SixteenSegmentedMemory parityMap = new(1 << joltages.Length);
-        parityMap.Add(0, 0);
-        var minLights = uint.MaxValue >>> 2;
+        (*combs, combs[1]) = (T.Zero, SWARHelper<T>.Expand((uint)buttonSpan[0]));
+        var masks = stackalloc uint[maskEnd];
+        (*masks, masks[1]) = (0, (uint)buttonSpan[0]);
 
-        for (uint msb = 1, log = 0; msb < maskEnd; msb <<= 1, ++log) {
-            for (var lowBits = 0U; lowBits < msb; ++lowBits) {
-                var bits = msb | lowBits;
-                var val = combs[bits] = combs[lowBits] + wideButtons[log];
-                Debug.Assert((val & SWARHelper<T>.BORROW_MASK) == T.Zero);
-                var valParity = SWARHelper<T>.CompressParity(val);
-                Debug.Assert(uint.CreateChecked(T.PopCount(SWARHelper<T>.PARITY_MASK & val)) == Popcnt.PopCount(valParity));
-                parityMap.Add(valParity, (ushort)bits);
-                if (valParity == lights) {
-                    var minSteps = MathUtils.Min(minLights, Popcnt.PopCount(bits));
-                    Debug.Assert(minSteps <= minLights & minSteps <= Popcnt.PopCount(bits));
-                    minLights = minSteps;
-                }
-            }
+        for (uint msb = 2, log = 1; msb < maskEnd; msb <<= 1, ++log) {
+            var button = (uint)buttonSpan[(int)log];
+            TensorPrimitives.Add(new(combs, (int)msb), SWARHelper<T>.Expand(button), new(combs + msb, (int)msb));
+            TensorPrimitives.Xor(new(masks, (int)msb), button, new(masks + msb, (int)msb));
         }
-        var requirements = SWARHelper<T>.Expand(joltages.Span);
-        return (DFS(combs, requirements, parityMap, []), minLights);
+
+        SixteenSegmentedMemory parityMap = new(1 << joltages.Length);
+        for (var i = 0; i < maskEnd; ++i)
+            parityMap.Add(masks[i], (ushort)i);
+
+        var minLights = uint.MaxValue >>> 2;
+        for (var curr = parityMap.GetSegment((int)lights, out var end); curr < end; ++curr)
+            minLights = MathUtils.Min(minLights, Popcnt.PopCount(*curr));
+
+        var target = SWARHelper<T>.Expand(joltages.Span);
+        //var mVal = DFS(combs, target, parityMap, []);
+        var mVal = SearchDict(combs, target, parityMap);
+        //var mVal = SearchLinearScan(combs, target, parityMap);
+        return (mVal, minLights);
     }
 
-    private static uint DFS<T>(T* combs, T requirements, in SixteenSegmentedMemory parityMap, Dictionary<T, uint> memo) where T : unmanaged, IBinaryInteger<T> {
+    [SkipLocalsInit]
+    private static uint SearchLinearScan<T>(T* combs, in T requirements, in SixteenSegmentedMemory parityMap) where T : unmanaged, IBinaryInteger<T> {
+        var prevBuffer = stackalloc T[MAX_SEARCH_ROW_LEN];
+        var nextBuffer = stackalloc T[MAX_SEARCH_ROW_LEN];
+        var prevMins = stackalloc uint[MAX_SEARCH_ROW_LEN];
+        var nextMins = stackalloc uint[MAX_SEARCH_ROW_LEN];
+        var (prevLen, nextLen) = (1, 0);
+        (*prevBuffer, *prevMins) = (requirements, 0);
+
+        var hasZero = false;
+        for (var i = 0; prevLen > 1 | !hasZero; ++i) {
+            var nextSpan = ReadOnlySpan<T>.Empty;
+            for (var j = 0; j < prevLen; ++j) {
+                var n = prevBuffer[j];
+                var cost = prevMins[j];
+                var curr = parityMap.GetSegment((int)SWARHelper<T>.CompressParity(n), out var end);
+                end = n == T.Zero ? curr + 1 : end;
+                for (; curr < end; ++curr) {
+                    var p = (uint)*curr;
+                    var remaining = n - combs[p];
+                    if ((remaining & SWARHelper<T>.BORROW_MASK) != T.Zero)
+                        continue;
+
+                    var shifted = remaining >>> 1;
+                    hasZero |= shifted == T.Zero;
+                    var nextCost = cost + (Popcnt.PopCount(p) << i);
+                    var idx = nextSpan.IndexOf(shifted);
+                    if (idx < 0) {
+                        nextBuffer[nextLen] = shifted;
+                        nextMins[nextLen] = nextCost;
+                        Debug.Assert(nextLen < MAX_SEARCH_ROW_LEN);
+                        nextSpan = new(nextBuffer, ++nextLen);
+                    } else {
+                        var m = nextMins + idx;
+                        *m = MathUtils.Min(*m, nextCost);
+                    }
+                }
+            }
+            var temp = prevBuffer;
+            prevBuffer = nextBuffer;
+            nextBuffer = temp;
+
+            var temp2 = prevMins;
+            prevMins = nextMins;
+            nextMins = temp2;
+
+            (prevLen, nextLen) = (nextLen, 0);
+        }
+
+        var zeroIdx = TensorPrimitives.IndexOfMin(new ReadOnlySpan<T>(prevBuffer, prevLen));
+        return prevMins[zeroIdx];
+    }
+
+    private static uint SearchDict<T>(T* combs, in T requirements, in SixteenSegmentedMemory parityMap) where T : unmanaged, IBinaryInteger<T> {
+        Dictionary<T, uint> prev = new(32);
+        Dictionary<T, uint> next = new(32);
+        prev.Add(requirements, 0);
+
+        var hasZero = false;
+        for (var i = 0; prev.Count > 1 | !hasZero; ++i) {
+            next.Clear();
+            foreach (var (n, cost) in prev) {
+                var curr = parityMap.GetSegment((int)SWARHelper<T>.CompressParity(n), out var end);
+                end = n == T.Zero ? curr + 1 : end;
+                for (; curr < end; ++curr) {
+                    var p = (uint)*curr;
+                    var remaining = n - combs[p];
+                    if ((remaining & SWARHelper<T>.BORROW_MASK) != T.Zero)
+                        continue;
+
+                    var shifted = remaining >>> 1;
+                    hasZero |= shifted == T.Zero;
+                    ref var d = ref CollectionsMarshal.GetValueRefOrAddDefault(next, shifted, out var exists);
+                    d = MathUtils.Min(exists ? d : uint.MaxValue >>> 2, cost + (Popcnt.PopCount(p) << i));
+                }
+            }
+            (prev, next) = (next, prev);
+        }
+        return prev[T.Zero];
+    }
+
+    private static uint DFS<T>(T* combs, in T requirements, in SixteenSegmentedMemory parityMap, Dictionary<T, uint> memo) where T : unmanaged, IBinaryInteger<T> {
         if (memo.TryGetValue(requirements, out var cached))
             return cached;
 
@@ -175,15 +254,14 @@ internal unsafe sealed class Day10 : DayBase {
             return 0;
 
         var res = uint.MaxValue >>> 2;
-        var first = parityMap.GetSegment((int)SWARHelper<T>.CompressParity(requirements), out var length);
-        for (var end = first + length; first < end; ++first) {
-            var p = (uint)*first;
-            var left = requirements - combs[p];
-            if ((left & SWARHelper<T>.BORROW_MASK) != T.Zero)
+        for (var curr = parityMap.GetSegment((int)SWARHelper<T>.CompressParity(requirements), out var end); curr < end; ++curr) {
+            var p = (uint)*curr;
+            var remaining = requirements - combs[p];
+            if ((remaining & SWARHelper<T>.BORROW_MASK) != T.Zero)
                 continue;
 
-            Debug.Assert((left & SWARHelper<T>.PARITY_MASK) == T.Zero);
-            res = MathUtils.Min(res, Popcnt.PopCount(p) + (DFS(combs, left >>> 1, parityMap, memo) << 1));
+            Debug.Assert((remaining & SWARHelper<T>.PARITY_MASK) == T.Zero);
+            res = MathUtils.Min(res, Popcnt.PopCount(p) + (DFS(combs, remaining >>> 1, parityMap, memo) << 1));
         }
         return memo[requirements] = res;
     }
