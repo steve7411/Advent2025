@@ -1,8 +1,11 @@
 ﻿using System.Diagnostics;
+using System.Runtime.InteropServices;
 
 namespace Advent2025;
 
 public abstract class DayBase : IDay {
+    private static readonly Dictionary<Type, byte[]> fileBytesLookup = [];
+
     protected DayBase() {
     }
 
@@ -22,11 +25,15 @@ public abstract class DayBase : IDay {
 
     protected StreamReader GetDataReader() => new(GetDataStream());
 
-    protected FileStream GetDataStream() {
-        var path = GetDataFilePath();
-        if (!File.Exists(path))
-            DownloadData();
-        return File.OpenRead(path);
+    protected Stream GetDataStream() {
+        ref var fileBytes = ref CollectionsMarshal.GetValueRefOrAddDefault(fileBytesLookup, GetType(), out _);
+        if (fileBytes is null) {
+            var path = GetDataFilePath();
+            if (!File.Exists(path))
+                DownloadData();
+            fileBytes = File.ReadAllBytes(path);
+        }
+        return new MemoryStream(fileBytes);
     }
 
     private void DownloadData() {
