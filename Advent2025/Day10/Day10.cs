@@ -49,9 +49,20 @@ internal readonly unsafe ref struct SixteenSegmentedMemory {
             baseAddr = null;
         }
     }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public bool ContainsAny(int idx) => lens[idx] > 0;
 }
 
 internal unsafe sealed class Day10 : DayBase {
+    private static class ThreadDicts<TKey, TVal> where TKey : notnull {
+        [ThreadStatic] private static Dictionary<TKey, TVal>? dictA;
+        [ThreadStatic] private static Dictionary<TKey, TVal>? dictB;
+
+        public static Dictionary<TKey, TVal> DictA => dictA ??= new(MAX_SEARCH_ROW_LEN);
+        public static Dictionary<TKey, TVal> DictB => dictB ??= new(MAX_SEARCH_ROW_LEN);
+    }
+
     const int SIZE = 193;
     const int MAX_SEARCH_ROW_LEN = 339;
 
@@ -158,9 +169,11 @@ internal unsafe sealed class Day10 : DayBase {
             minLights = MathUtils.Min(minLights, Popcnt.PopCount(*curr));
 
         var target = SWARHelper<T>.Expand(joltages.Span);
-        //var mVal = DFS(combs, target, parityMap, []);
         var mVal = SearchDict(combs, target, parityMap);
+        //var mVal = DFS(combs, target, parityMap, []);
         //var mVal = SearchLinearScan(combs, target, parityMap);
+        //var mVal = BFS(combs, target, parityMap);
+        //var mVal = SearchDijkstra(combs, target, parityMap);
         return (mVal, minLights);
     }
 
@@ -170,6 +183,7 @@ internal unsafe sealed class Day10 : DayBase {
         var nextBuffer = stackalloc T[MAX_SEARCH_ROW_LEN];
         var prevMins = stackalloc uint[MAX_SEARCH_ROW_LEN];
         var nextMins = stackalloc uint[MAX_SEARCH_ROW_LEN];
+
         var (prevLen, nextLen) = (1, 0);
         (*prevBuffer, *prevMins) = (requirements, 0);
 
@@ -188,17 +202,20 @@ internal unsafe sealed class Day10 : DayBase {
                         continue;
 
                     var shifted = remaining >>> 1;
+                    if (!parityMap.ContainsAny((int)SWARHelper<T>.CompressParity(shifted)))
+                        continue;
                     hasZero |= shifted == T.Zero;
                     var nextCost = cost + (Popcnt.PopCount(p) << i);
+
                     var idx = nextSpan.IndexOf(shifted);
-                    if (idx < 0) {
+                    if (idx >= 0) {
+                        var m = nextMins + idx;
+                        *m = MathUtils.Min(*m, nextCost);
+                    } else {
                         nextBuffer[nextLen] = shifted;
                         nextMins[nextLen] = nextCost;
                         Debug.Assert(nextLen < MAX_SEARCH_ROW_LEN);
                         nextSpan = new(nextBuffer, ++nextLen);
-                    } else {
-                        var m = nextMins + idx;
-                        *m = MathUtils.Min(*m, nextCost);
                     }
                 }
             }
@@ -218,8 +235,9 @@ internal unsafe sealed class Day10 : DayBase {
     }
 
     private static uint SearchDict<T>(T* combs, in T requirements, in SixteenSegmentedMemory parityMap) where T : unmanaged, IBinaryInteger<T> {
-        Dictionary<T, uint> prev = new(32);
-        Dictionary<T, uint> next = new(32);
+        Dictionary<T, uint> prev = ThreadDicts<T, uint>.DictA;
+        Dictionary<T, uint> next = ThreadDicts<T, uint>.DictB;
+        prev.Clear();
         prev.Add(requirements, 0);
 
         var hasZero = false;
@@ -243,6 +261,52 @@ internal unsafe sealed class Day10 : DayBase {
             (prev, next) = (next, prev);
         }
         return prev[T.Zero];
+    }
+
+    private static uint SearchDijkstra<T>(T* combs, in T requirements, in SixteenSegmentedMemory parityMap) where T : unmanaged, IBinaryInteger<T> {
+        PriorityQueue<(T reqs, int depth), uint> q = new();
+        q.Enqueue((requirements, 0), 0);
+        while (q.TryDequeue(out var curr, out var cost)) {
+            if (curr.reqs == T.Zero)
+                return cost;
+
+            for (var ptr = parityMap.GetSegment((int)SWARHelper<T>.CompressParity(curr.reqs), out var end); ptr < end; ++ptr) {
+                var p = (uint)*ptr;
+                var remaining = curr.reqs - combs[p];
+                if ((remaining & SWARHelper<T>.BORROW_MASK) == T.Zero)
+                    q.Enqueue((remaining >>> 1, curr.depth + 1), (Popcnt.PopCount(p) << curr.depth) + cost);
+            }
+        }
+        throw new UnreachableException();
+    }
+
+    private static uint BFS<T>(T* combs, in T requirements, in SixteenSegmentedMemory parityMap) where T : unmanaged, IBinaryInteger<T> {
+        Queue<(T reqs, uint cost, int depth)> q = new();
+        q.Enqueue((requirements, 0, 0));
+        var (min, hasZero) = (uint.MaxValue >>> 2, false);
+        while (q.Count > 0) {
+            for (var i = q.Count; i > 0; --i) {
+                var (reqs, cost, depth) = q.Dequeue();
+                var isZero = reqs == T.Zero;
+                hasZero |= isZero;
+                if (isZero) {
+                    min = MathUtils.Min(min, cost);
+                    continue;
+                }
+
+                for (var ptr = parityMap.GetSegment((int)SWARHelper<T>.CompressParity(reqs), out var end); ptr < end; ++ptr) {
+                    var p = (uint)*ptr;
+                    var remaining = reqs - combs[p];
+                    if ((remaining & SWARHelper<T>.BORROW_MASK) == T.Zero) {
+                        var newCost = (Popcnt.PopCount(p) << depth) + cost;
+                        var shifted = remaining >>> 1;
+                        q.Enqueue((shifted, newCost, depth + 1));
+                    }
+                }
+            }
+        }
+        return min;
+
     }
 
     private static uint DFS<T>(T* combs, in T requirements, in SixteenSegmentedMemory parityMap, Dictionary<T, uint> memo) where T : unmanaged, IBinaryInteger<T> {
