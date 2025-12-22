@@ -52,7 +52,7 @@ internal unsafe sealed class Day10 : DayBase {
         }
 
         var (localJoltageSum, localLightsSum) = (0U, 0U);
-        Parallel.ForEach(inputBuffer, new() { MaxDegreeOfParallelism = -1 }, () => (0U, 0U), (input, _, _, acc) => {
+        Parallel.ForEach(inputBuffer, new() { MaxDegreeOfParallelism = -1 }, () => (0U, 0U), static (input, _, _, acc) => {
             var (buttons, joltages, desired) = input;
             var (joltage, lights) = joltages.Length switch {
                 <= 6 => ShortestPathJoltages<ulong, SWARHelper64>(joltages, buttons, desired),
