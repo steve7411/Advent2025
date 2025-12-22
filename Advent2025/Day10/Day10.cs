@@ -99,7 +99,7 @@ internal unsafe sealed class Day10 : DayBase {
     [SkipLocalsInit]
     private static (uint joltage, uint lights) ShortestPathJoltages<TUInt, Tswar>(ReadOnlyMemory<int> joltages, ReadOnlyMemory<int> buttons, uint lights)
         where TUInt : unmanaged, IBinaryInteger<TUInt>
-        where Tswar : ISWARHelpwer<TUInt> {
+        where Tswar : ISWARHelper<TUInt> {
 
         var buttonSpan = buttons.Span;
         var maskEnd = 1 << buttons.Length;
@@ -133,7 +133,7 @@ internal unsafe sealed class Day10 : DayBase {
 
     private static uint SearchDict<TUInt, Tswar>(TUInt* combs, in TUInt requirements, in SixteenSegmentedMemory parityMap)
         where TUInt : unmanaged, IBinaryInteger<TUInt>
-        where Tswar : ISWARHelpwer<TUInt> {
+        where Tswar : ISWARHelper<TUInt> {
         var prev = ThreadDicts<TUInt, uint>.DictA;
         var next = ThreadDicts<TUInt, uint>.DictB;
         prev.Clear();
